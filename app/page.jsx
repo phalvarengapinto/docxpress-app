@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 export default function Page() {
   return (
     <main
@@ -27,7 +29,6 @@ export default function Page() {
             </strong>
           </p>
 
-          {/* Formulário */}
           <form
             onSubmit={async (e) => {
               e.preventDefault();
