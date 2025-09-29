@@ -11,10 +11,22 @@ export default function Home() {
       }}
     >
       <div style={{ maxWidth: 720, width: "100%", padding: "24px" }}>
-        <div style={{ background: "#11162a", border: "1px solid #1f2947", borderRadius: 16, padding: 24 }}>
+        <div
+          style={{
+            background: "#11162a",
+            border: "1px solid #1f2947",
+            borderRadius: 16,
+            padding: 24,
+          }}
+        >
           <h1 style={{ margin: "0 0 8px" }}>DocXpress</h1>
-          <p><strong>Documentos oficiais prontos em minutos, sem burocracia.</strong></p>
+          <p>
+            <strong>
+              Documentos oficiais prontos em minutos, sem burocracia.
+            </strong>
+          </p>
 
+          {/* Formulário para capturar e-mails */}
           <form
             onSubmit={async (e) => {
               e.preventDefault();
@@ -69,7 +81,9 @@ export default function Home() {
             </button>
           </form>
 
-          <p style={{ opacity: 0.7, fontSize: 12, marginTop: 16 }}>© DocXpress — docxpress.tech</p>
+          <p style={{ opacity: 0.7, fontSize: 12, marginTop: 16 }}>
+            © DocXpress — docxpress.tech
+          </p>
         </div>
       </div>
     </main>
