@@ -6,7 +6,7 @@ export default function Home() {
   const widgetIdRef = useRef(null);
   const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
 
-  // carrega o script e renderiza o widget explicitamente
+  // Carrega o script do reCAPTCHA e renderiza o widget explicitamente
   useEffect(() => {
     const id = "recaptcha-script";
     if (document.getElementById(id)) return;
@@ -19,7 +19,6 @@ export default function Home() {
     s.onload = () => {
       if (window.grecaptcha && siteKey && widgetIdRef.current === null) {
         window.grecaptcha.ready(() => {
-          // Renderiza o widget e guarda o widgetId
           const container = document.getElementById("recaptcha-container");
           if (container) {
             widgetIdRef.current = window.grecaptcha.render(container, {
@@ -41,13 +40,31 @@ export default function Home() {
         placeItems: "center",
         background: "#0b0f19",
         color: "#eef2ff",
-        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
+        fontFamily:
+          "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif",
       }}
     >
       <div style={{ maxWidth: 720, width: "100%", padding: "24px" }}>
-        <div style={{ background: "#11162a", border: "1px solid #1f2947", borderRadius: 16, padding: 24 }}>
+        <div
+          style={{
+            background: "#11162a",
+            border: "1px solid #1f2947",
+            borderRadius: 16,
+            padding: 24,
+          }}
+        >
           <h1 style={{ margin: "0 0 8px" }}>DocXpress</h1>
-          <p><strong>Documentos oficiais prontos em minutos, sem burocracia.</strong></p>
+          <p>
+            <strong>Documentos oficiais prontos em minutos, sem burocracia.</strong>
+          </p>
+
+          {/* AVISO se a site key não estiver presente */}
+          {!siteKey && (
+            <p style={{ marginTop: 12, color: "#ffe28c" }}>
+              Atenção: reCAPTCHA sem site key. Defina{" "}
+              <code>NEXT_PUBLIC_RECAPTCHA_SITE_KEY</code> na Vercel.
+            </p>
+          )}
 
           <form
             onSubmit={async (e) => {
@@ -58,34 +75,50 @@ export default function Home() {
               const form = e.currentTarget;
               const email = form.email.value;
 
-              // pega token do widget específico
-              const token = window.grecaptcha?.getResponse(widgetIdRef.current ?? undefined);
+              // Pega o token do reCAPTCHA (checkbox)
+              const token = window.grecaptcha?.getResponse(
+                widgetIdRef.current ?? undefined
+              );
               if (!token) {
                 setStatus("error");
                 setError("Por favor, marque o reCAPTCHA.");
                 return;
               }
 
-              const res = await fetch("/api/lead", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, source: "landing", recaptchaToken: token }),
-              });
+              try {
+                const res = await fetch("/api/lead", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    email,
+                    source: "landing",
+                    recaptchaToken: token,
+                  }),
+                });
 
-              const json = await res.json();
+                const json = await res.json();
 
-              if (json.ok && json.duplicated) {
-                setStatus("dup");
-              } else if (json.ok) {
-                setStatus("success");
-                // evento de analytics se você já configurou Plausible
-                if (window.plausible) window.plausible("Lead", { props: { source: "landing" } });
-                window.grecaptcha?.reset(widgetIdRef.current ?? undefined);
-                setTimeout(() => { window.location.href = "/obrigado"; }, 1200);
-              } else {
+                if (json.ok && json.duplicated) {
+                  setStatus("dup");
+                } else if (json.ok) {
+                  setStatus("success");
+                  // Evento de conversão no Plausible
+                  if (typeof window !== "undefined" && window.plausible) {
+                    window.plausible("Lead", { props: { source: "landing" } });
+                  }
+                  // Reseta reCAPTCHA e redireciona
+                  window.grecaptcha?.reset(widgetIdRef.current ?? undefined);
+                  setTimeout(() => {
+                    window.location.href = "/obrigado";
+                  }, 1200);
+                } else {
+                  setStatus("error");
+                  setError(json.error || "tente novamente");
+                  window.grecaptcha?.reset(widgetIdRef.current ?? undefined);
+                }
+              } catch {
                 setStatus("error");
-                setError(json.error || "tente novamente");
-                // reseta o token para nova tentativa
+                setError("Falha de rede. Tente novamente.");
                 window.grecaptcha?.reset(widgetIdRef.current ?? undefined);
               }
 
@@ -125,16 +158,30 @@ export default function Home() {
               </button>
             </div>
 
-            {/* container onde o reCAPTCHA é renderizado */}
+            {/* Container onde o reCAPTCHA é renderizado */}
             <div id="recaptcha-container" />
-
           </form>
 
-          {status === "success" && <p style={{ marginTop: 12, color: "#8cffc1" }}>Tudo certo! Redirecionando…</p>}
-          {status === "dup" && <p style={{ marginTop: 12, color: "#ffe28c" }}>Você já está na lista. Obrigado!</p>}
-          {status === "error" && <p style={{ marginTop: 12, color: "#ff8c8c" }}>Erro: {error}</p>}
+          {/* Mensagens de feedback */}
+          {status === "success" && (
+            <p style={{ marginTop: 12, color: "#8cffc1" }}>
+              Tudo certo! Redirecionando…
+            </p>
+          )}
+          {status === "dup" && (
+            <p style={{ marginTop: 12, color: "#ffe28c" }}>
+              Você já está na lista. Obrigado!
+            </p>
+          )}
+          {status === "error" && (
+            <p style={{ marginTop: 12, color: "#ff8c8c" }}>
+              Erro: {error}
+            </p>
+          )}
 
-          <p style={{ opacity: 0.7, fontSize: 12, marginTop: 16 }}>© DocXpress — docxpress.tech</p>
+          <p style={{ opacity: 0.7, fontSize: 12, marginTop: 16 }}>
+            © DocXpress — docxpress.tech
+          </p>
         </div>
       </div>
     </main>
