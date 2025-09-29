@@ -1,33 +1,46 @@
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
+
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET;
+
+  if (!SUPABASE_URL || !SERVICE_ROLE) {
+    return res.status(500).json({ ok: false, error: "Env vars ausentes" });
   }
 
   try {
-    const SUPABASE_URL = process.env.SUPABASE_URL;                 // ex: https://xxxx.supabase.co
-    const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;    // service_role (SECRETA)
-
-    if (!SUPABASE_URL || !SERVICE_ROLE) {
-      return res.status(500).json({ ok: false, error: "Env vars ausentes" });
-    }
-
-    const { email, source } = req.body || {};
+    const { email, source, recaptchaToken } = req.body || {};
     const isEmail = typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     if (!isEmail) return res.status(400).json({ ok: false, error: "Email inválido" });
 
-    // 1) Verificar duplicado
-    const dup = await fetch(`${SUPABASE_URL}/rest/v1/leads?email=eq.${encodeURIComponent(email)}&select=id`, {
+    // 🔐 valida reCAPTCHA (se configurado)
+    if (RECAPTCHA_SECRET) {
+      if (!recaptchaToken) return res.status(400).json({ ok: false, error: "reCAPTCHA ausente" });
+
+      const verify = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `secret=${encodeURIComponent(RECAPTCHA_SECRET)}&response=${encodeURIComponent(recaptchaToken)}&remoteip=${encodeURIComponent((req.headers["x-forwarded-for"] || "").split(",")[0])}`
+      });
+      const vjson = await verify.json();
+      if (!vjson.success) {
+        return res.status(400).json({ ok: false, error: "Falha no reCAPTCHA" });
+      }
+    }
+
+    // 1) checar duplicado
+    const dupRes = await fetch(`${SUPABASE_URL}/rest/v1/leads?email=eq.${encodeURIComponent(email)}&select=id`, {
       headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${SERVICE_ROLE}` }
     });
-    if (!dup.ok) return res.status(500).json({ ok: false, error: "Erro ao verificar lead" });
-
-    const arr = await dup.json();
+    if (!dupRes.ok) return res.status(500).json({ ok: false, error: "Falha ao verificar lead" });
+    const arr = await dupRes.json();
     if (Array.isArray(arr) && arr.length > 0) {
       return res.status(200).json({ ok: true, duplicated: true });
     }
 
-    // 2) Inserir
-    const ins = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
+    // 2) inserir
+    const insRes = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -37,16 +50,13 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify([{ email, source: source ?? "landing" }])
     });
-
-    if (!ins.ok) {
-      const txt = await ins.text();
-      console.error("Supabase insert error:", ins.status, txt);
-      return res.status(500).json({ ok: false, error: "Não foi possível salvar seu e-mail" });
+    if (!insRes.ok) {
+      const txt = await insRes.text();
+      return res.status(500).json({ ok: false, error: "Não foi possível salvar seu e-mail", details: txt.slice(0, 500) });
     }
 
     return res.status(200).json({ ok: true });
   } catch (e) {
-    console.error(e);
     return res.status(500).json({ ok: false, error: "Erro inesperado" });
   }
 }
